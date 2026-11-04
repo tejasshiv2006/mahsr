@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { BorderRadius, Colors, Spacing } from '../../src/constants/theme';
 import { DEMO_TRAINS, MAHSR_STATIONS } from '../../src/constants/stations';
 import type { Station } from '../../src/constants/stations';
@@ -63,6 +64,7 @@ export default function SearchScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Top Header & Language Picker */}
         <View style={styles.topRow}>
           <View>
             <Text style={styles.eyebrow}>MAHSR CONNECT ONE</Text>
@@ -84,31 +86,49 @@ export default function SearchScreen() {
         </View>
         <Text style={styles.notice}>{t.demoData} · Demo booking flow only</Text>
 
+        {/* Main Search Card */}
         <View style={styles.searchCard}>
-          <StationField label={t.fromStation} station={params.fromStation} onPress={() => setStationPicker('fromStation')} />
+          <StationField 
+            label={t.fromStation} 
+            station={params.fromStation} 
+            onPress={() => setStationPicker('fromStation')} 
+            icon="radio-button-on" 
+            iconColor="#0052cc"
+          />
+          
           <TouchableOpacity
             style={styles.swapButton}
             accessibilityRole="button"
             accessibilityLabel={t.swap}
+            activeOpacity={0.7}
             onPress={() => setParams({ fromStation: params.toStation, toStation: params.fromStation })}
           >
-            <Text style={styles.swapText}>⇅</Text>
+            <Ionicons name="swap-vertical" size={18} color={Colors.secondary} />
           </TouchableOpacity>
-          <StationField label={t.toStation} station={params.toStation} onPress={() => setStationPicker('toStation')} />
 
+          <StationField 
+            label={t.toStation} 
+            station={params.toStation} 
+            onPress={() => setStationPicker('toStation')} 
+            icon="location" 
+            iconColor="#ff4d4d"
+          />
+
+          {/* Date & Passenger Steppers */}
           <View style={styles.optionsRow}>
             <View style={styles.option}>
               <Text style={styles.fieldLabel}>{t.travelDate}</Text>
               <View style={styles.stepper}>
                 <TouchableOpacity onPress={() => changeDate(-1)} style={styles.stepButton}>
-                  <Text style={styles.stepText}>−</Text>
+                  <Ionicons name="remove" size={16} color={Colors.secondary} />
                 </TouchableOpacity>
                 <Text style={styles.optionValue}>{dateLabel}</Text>
                 <TouchableOpacity onPress={() => changeDate(1)} style={styles.stepButton}>
-                  <Text style={styles.stepText}>+</Text>
+                  <Ionicons name="add" size={16} color={Colors.secondary} />
                 </TouchableOpacity>
               </View>
             </View>
+
             <View style={styles.option}>
               <Text style={styles.fieldLabel}>{t.passengers}</Text>
               <View style={styles.stepper}>
@@ -116,28 +136,32 @@ export default function SearchScreen() {
                   onPress={() => setParams({ passengers: Math.max(1, params.passengers - 1) })}
                   style={styles.stepButton}
                 >
-                  <Text style={styles.stepText}>−</Text>
+                  <Ionicons name="remove" size={16} color={Colors.secondary} />
                 </TouchableOpacity>
                 <Text style={styles.optionValue}>{params.passengers}</Text>
                 <TouchableOpacity
                   onPress={() => setParams({ passengers: Math.min(6, params.passengers + 1) })}
                   style={styles.stepButton}
                 >
-                  <Text style={styles.stepText}>+</Text>
+                  <Ionicons name="add" size={16} color={Colors.secondary} />
                 </TouchableOpacity>
               </View>
             </View>
           </View>
 
+          {/* Search Button */}
           <TouchableOpacity
             style={[styles.searchButton, results.length === 0 && styles.searchButtonDisabled]}
             onPress={searchTrains}
+            activeOpacity={0.8}
             disabled={results.length === 0}
           >
-            <Text style={styles.searchButtonText}>⌕  {t.searchTrains}</Text>
+            <Ionicons name="search" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
+            <Text style={styles.searchButtonText}>{t.searchTrains}</Text>
           </TouchableOpacity>
         </View>
 
+        {/* Results List */}
         {searched && (
           <>
             <View style={styles.resultsHeading}>
@@ -150,6 +174,7 @@ export default function SearchScreen() {
               <TouchableOpacity
                 key={train.id}
                 style={styles.trainCard}
+                activeOpacity={0.9}
                 onPress={() => {
                   setSelectedTrain(train);
                   router.push('/train-details');
@@ -172,7 +197,10 @@ export default function SearchScreen() {
                 </View>
                 <View style={styles.trainCardBottom}>
                   <Text style={styles.seatsText}>{train.availableSeats} {t.seatsAvailable}</Text>
-                  <Text style={styles.detailsText}>{t.viewDetails}  ›</Text>
+                  <View style={styles.detailsRow}>
+                    <Text style={styles.detailsText}>{t.viewDetails}</Text>
+                    <Ionicons name="chevron-forward" size={14} color={Colors.secondary} />
+                  </View>
                 </View>
               </TouchableOpacity>
             ))}
@@ -181,109 +209,7 @@ export default function SearchScreen() {
         )}
       </ScrollView>
 
+      {/* Station Selector Modal */}
       <Modal visible={stationPicker !== null} transparent animationType="slide" onRequestClose={() => setStationPicker(null)}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{stationPicker === 'fromStation' ? t.fromStation : t.toStation}</Text>
-              <TouchableOpacity onPress={() => setStationPicker(null)}><Text style={styles.closeText}>✕</Text></TouchableOpacity>
-            </View>
-            <ScrollView>
-              {MAHSR_STATIONS.map((station) => (
-                <TouchableOpacity key={station.id} style={styles.stationOption} onPress={() => chooseStation(station)}>
-                  <View>
-                    <Text style={styles.stationName}>{station.name}</Text>
-                    <Text style={styles.stationState}>{station.state} · {station.code}</Text>
-                  </View>
-                  <Text style={styles.stationDistance}>{station.distance} km</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
-  );
-}
-
-function StationField({ label, station, onPress }: { label: string; station: Station | null; onPress: () => void }) {
-  return (
-    <TouchableOpacity onPress={onPress} style={styles.stationField}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <Text style={styles.stationValue}>{station?.name ?? 'Select station'}</Text>
-      <Text style={styles.stationCode}>{station?.code ?? ''}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function TimeStation({ time, station, label, right = false }: { time: string; station: string; label: string; right?: boolean }) {
-  return (
-    <View style={[styles.timeStation, right && styles.timeStationRight]}>
-      <Text style={styles.timeLabel}>{label}</Text>
-      <Text style={styles.timeValue}>{time}</Text>
-      <Text style={styles.timePlace} numberOfLines={1}>{station}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.surface },
-  content: { padding: Spacing.base, paddingBottom: 32 },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  eyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.4, color: Colors.secondary },
-  heading: { color: Colors.primary, fontSize: 24, fontWeight: '800', marginTop: 4 },
-  languageRow: { flexDirection: 'row', gap: 3 },
-  languageChip: { width: 29, height: 29, borderRadius: BorderRadius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surfaceCard },
-  languageChipActive: { backgroundColor: Colors.primary },
-  languageText: { fontSize: 10, fontWeight: '700', color: Colors.textSecondary },
-  languageTextActive: { color: Colors.textOnDark },
-  notice: { color: Colors.textSecondary, fontSize: 12, marginTop: 5, marginBottom: 16 },
-  searchCard: { backgroundColor: Colors.surfaceCard, borderRadius: BorderRadius.xl, padding: 16, borderWidth: 1, borderColor: Colors.divider },
-  stationField: { paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: Colors.divider, borderRadius: BorderRadius.md, backgroundColor: '#FBFCFE' },
-  fieldLabel: { color: Colors.textSecondary, fontSize: 11, fontWeight: '600' },
-  stationValue: { color: Colors.textPrimary, fontSize: 16, fontWeight: '700', marginTop: 3 },
-  stationCode: { color: Colors.secondary, fontSize: 11, marginTop: 2 },
-  swapButton: { alignSelf: 'flex-end', marginVertical: -14, marginRight: 13, zIndex: 1, width: 30, height: 30, borderRadius: BorderRadius.full, backgroundColor: Colors.surfaceCard, borderWidth: 1, borderColor: Colors.divider, alignItems: 'center', justifyContent: 'center' },
-  swapText: { color: Colors.secondary, fontSize: 18, fontWeight: '700' },
-  optionsRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  option: { flex: 1 },
-  stepper: { height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, marginTop: 4, borderWidth: 1, borderColor: Colors.divider, borderRadius: BorderRadius.md },
-  stepButton: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  stepText: { color: Colors.secondary, fontSize: 20, fontWeight: '700' },
-  optionValue: { color: Colors.textPrimary, fontSize: 13, fontWeight: '700' },
-  searchButton: { backgroundColor: Colors.accent, paddingVertical: 14, alignItems: 'center', borderRadius: BorderRadius.md, marginTop: 14 },
-  searchButtonDisabled: { opacity: 0.5 },
-  searchButtonText: { color: Colors.primary, fontWeight: '800', fontSize: 15 },
-  resultsHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 22, marginBottom: 10 },
-  sectionTitle: { fontSize: 18, color: Colors.primary, fontWeight: '800' },
-  resultCount: { color: Colors.secondary, fontSize: 12, fontWeight: '800', backgroundColor: '#E5F3FD', paddingHorizontal: 8, paddingVertical: 3, borderRadius: BorderRadius.full },
-  trainCard: { padding: 14, backgroundColor: Colors.surfaceCard, borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.divider, marginBottom: 10 },
-  trainCardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  trainNameBlock: { flex: 1 },
-  trainName: { color: Colors.textPrimary, fontSize: 15, fontWeight: '800' },
-  trainNumber: { color: Colors.textSecondary, fontSize: 11, marginTop: 3 },
-  trainFare: { color: Colors.primary, fontSize: 16, fontWeight: '800' },
-  trainTimes: { flexDirection: 'row', alignItems: 'center', marginTop: 14 },
-  timeStation: { width: 90 },
-  timeStationRight: { alignItems: 'flex-end' },
-  timeLabel: { color: Colors.textSecondary, fontSize: 10 },
-  timeValue: { color: Colors.primary, fontSize: 20, fontWeight: '800', marginTop: 2 },
-  timePlace: { color: Colors.textSecondary, fontSize: 11, marginTop: 2, maxWidth: 90 },
-  duration: { flex: 1, alignItems: 'center', paddingHorizontal: 5 },
-  durationText: { color: Colors.textSecondary, fontSize: 10, marginBottom: 5 },
-  routeLine: { height: 1, width: '100%', backgroundColor: Colors.divider },
-  trainCardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, marginTop: 10, borderTopWidth: 1, borderTopColor: Colors.divider },
-  seatsText: { color: Colors.success, fontSize: 11, fontWeight: '700' },
-  detailsText: { color: Colors.secondary, fontSize: 12, fontWeight: '700' },
-  emptyText: { color: Colors.textSecondary, backgroundColor: Colors.surfaceCard, padding: 20, borderRadius: BorderRadius.md },
-  footerNote: { color: Colors.textSecondary, fontSize: 10, textAlign: 'center', marginTop: 14 },
-  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modalCard: { backgroundColor: Colors.surfaceCard, maxHeight: '80%', borderTopLeftRadius: BorderRadius.xl, borderTopRightRadius: BorderRadius.xl, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12 },
-  modalTitle: { color: Colors.primary, fontSize: 18, fontWeight: '800' },
-  closeText: { color: Colors.textSecondary, fontSize: 17, padding: 4 },
-  stationOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13, borderTopWidth: 1, borderTopColor: Colors.divider },
-  stationName: { color: Colors.textPrimary, fontWeight: '700', fontSize: 15 },
-  stationState: { color: Colors.textSecondary, fontSize: 11, marginTop: 3 },
-  stationDistance: { color: Colors.secondary, fontSize: 12, fontWeight: '700' },
-});
+          <View style={styles.modalCard}></View>
