@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "MAHSR Connect One",
+    "slug": "mahsr-connect-one",
+    "scheme": "mahsrconnect",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "android": {
+      "package": "com.anonymous.mahsrconnectone"
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "1010e662-600e-452a-a5ff-8673f5c5f9bf"
+      }
+    }
+  }
+}
