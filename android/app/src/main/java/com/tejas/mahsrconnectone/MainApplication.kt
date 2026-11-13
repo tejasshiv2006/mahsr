@@ -1,4 +1,4 @@
-package com.anonymous.mahsrconnectone
+package com.tejas.mahsrconnectone
 
 import android.app.Application
 import android.content.res.Configuration

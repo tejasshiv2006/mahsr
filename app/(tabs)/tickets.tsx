@@ -1,174 +1,148 @@
 import React from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Colors, Spacing, BorderRadius, Shadow } from '../../src/constants/theme';
-import { useAppStore } from '../../src/store/useAppStore';
+import { Colors, BorderRadius } from '../../src/constants/theme';
 import { useTicketStore } from '../../src/store/useTicketStore';
+import { useAppStore } from '../../src/store/useAppStore';
 import { translations } from '../../src/constants/translations';
+import { localStationName } from '../../src/constants/stations';
 
-export default function TicketsScreen() {
-  const { language } = useAppStore();
-  const t = translations[language];
-  const { tickets, removeTicket } = useTicketStore();
+export default function TicketsTabScreen() {
+  const tickets = useTicketStore((s: any) => s.tickets);
+  const language = useAppStore((s: any) => s.language);
+  const t = translations[language as keyof typeof translations] ?? translations.en;
+
+  // Foolproof station text helper using localStationName & fallback keys
+  const getStationText = (station: any) => {
+    if (!station) return '';
+    if (typeof station === 'string') return station;
+    if (typeof station === 'object') {
+      try {
+        const localized = localStationName ? localStationName(station, language) : null;
+        if (localized && typeof localized === 'string') return localized;
+      } catch (e) {}
+
+      const name = station.name || station.nameHi || station.nameMr || station.nameGu || station.code;
+      if (typeof name === 'string') return name;
+      if (name && typeof name === 'object') return name.en || name.name || '';
+    }
+    return '';
+  };
+
+  // Foolproof safe text handler to prevent object crashes
+  const safeText = (val: any) => {
+    if (!val) return '';
+    if (typeof val === 'string' || typeof val === 'number') return String(val);
+    if (typeof val === 'object') {
+      const obj: any = val;
+      const text = obj.name || obj.en || obj.code || obj.title || obj.value;
+      if (typeof text === 'string') return text;
+      if (text && typeof text === 'object') return text.en || text.name || '';
+      return '';
+    }
+    return String(val);
+  };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={['#0B1F3A', '#1685D5']} style={styles.header}>
-        <Text style={styles.headerTitle}>🎫 {t.myTickets}</Text>
-        <Text style={styles.headerSub}>Your demo bookings</Text>
-      </LinearGradient>
+    <SafeAreaView style={styles.root} edges={['top']}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{t.myTickets || 'My Tickets'}</Text>
+      </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        {/* Demo notice */}
-        <View style={styles.demoNotice}>
-          <Text style={styles.demoNoticeText}>⚠️ All tickets are DEMO only – not valid for actual travel.</Text>
-        </View>
-
-        {tickets.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>🎫</Text>
-            <Text style={styles.emptyTitle}>No Demo Tickets Yet</Text>
-            <Text style={styles.emptySub}>Search for a train and book a demo ticket to see it here.</Text>
-            <TouchableOpacity style={styles.searchBtn} onPress={() => router.push('/(tabs)/search')}>
-              <LinearGradient colors={['#1685D5', '#0B6DAE']} style={styles.searchBtnGrad}>
-                <Text style={styles.searchBtnText}>🔍 Search Trains</Text>
-              </LinearGradient>
+        {(!tickets || tickets.length === 0) ? (
+          <View style={styles.center}>
+            <Text style={styles.noTicketText}>{t.noTicketFound || 'No active tickets found.'}</Text>
+            <TouchableOpacity style={styles.searchButton} onPress={() => router.replace('/(tabs)/search')}>
+              <Text style={styles.searchButtonText}>{t.searchTrains || 'Search Trains'}</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          tickets.map((ticket) => (
-            <View key={ticket.id} style={styles.ticketCard}>
-              {/* Header */}
-              <LinearGradient colors={['#0B1F3A', '#1685D5']} style={styles.ticketHeader}>
-                <View>
-                  <Text style={styles.ticketAppName}>MAHSR Connect One</Text>
-                  <View style={styles.demoBadge}><Text style={styles.demoBadgeText}>DEMO TICKET</Text></View>
+          tickets.map((ticket: any) => {
+            const validQrData = ticket.qrData && ticket.qrData.trim().length > 0 
+              ? ticket.qrData 
+              : JSON.stringify({
+                  id: ticket.id,
+                  bookingId: ticket.bookingId,
+                  trainNumber: ticket.trainNumber,
+                  passengerName: ticket.passengerName,
+                  seats: ticket.seats,
+                  date: ticket.travelDate
+                });
+
+            const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(validQrData)}`;
+
+            return (
+              <TouchableOpacity 
+                key={ticket.id} 
+                style={styles.card}
+                onPress={() => router.push(`/ticket?id=${ticket.id}`)}
+              >
+                <View style={styles.cardHeader}>
+                  <Text style={styles.route}>
+                    {getStationText(ticket.fromStation)} → {getStationText(ticket.toStation)}
+                  </Text>
+                  <Text style={styles.statusBadge}>CONFIRMED</Text>
                 </View>
-                <Text style={styles.ticketEmoji}>🎫</Text>
-              </LinearGradient>
 
-              {/* Body */}
-              <View style={styles.ticketBody}>
-                <View style={styles.ticketRow}>
-                  <View style={styles.ticketStation}>
-                    <Text style={styles.ticketTime}>{ticket.departureTime}</Text>
-                    <Text style={styles.ticketStationName}>{ticket.fromStation}</Text>
-                  </View>
-                  <View style={styles.ticketMid}>
-                    <Text style={styles.ticketDuration}>🚄</Text>
-                    <View style={styles.ticketLine} />
-                  </View>
-                  <View style={[styles.ticketStation, { alignItems: 'flex-end' }]}>
-                    <Text style={styles.ticketTime}>{ticket.arrivalTime}</Text>
-                    <Text style={styles.ticketStationName}>{ticket.toStation}</Text>
-                  </View>
-                </View>
+                <Text style={styles.trainInfo}>
+                  {safeText(ticket.trainNumber)} {safeText(ticket.trainName)}
+                </Text>
 
-                <View style={styles.ticketDividerDashed} />
-
-                <View style={styles.ticketInfoGrid}>
-                  <View style={styles.ticketInfo}>
-                    <Text style={styles.ticketInfoLabel}>Passenger</Text>
-                    <Text style={styles.ticketInfoValue}>{ticket.passengerName}</Text>
+                <View style={styles.detailsRow}>
+                  <View>
+                    <Text style={styles.muted}>{t.travelDate || 'Date'}</Text>
+                    <Text style={styles.value}>{safeText(ticket.travelDate)}</Text>
                   </View>
-                  <View style={styles.ticketInfo}>
-                    <Text style={styles.ticketInfoLabel}>Booking ID</Text>
-                    <Text style={[styles.ticketInfoValue, { color: Colors.secondary }]}>{ticket.bookingId}</Text>
+                  <View>
+                    <Text style={styles.muted}>{t.departure || 'Departure'}</Text>
+                    <Text style={styles.value}>{safeText(ticket.departureTime)}</Text>
                   </View>
-                  <View style={styles.ticketInfo}>
-                    <Text style={styles.ticketInfoLabel}>Seat(s)</Text>
-                    <Text style={styles.ticketInfoValue}>{ticket.seats.join(', ')}</Text>
-                  </View>
-                  <View style={styles.ticketInfo}>
-                    <Text style={styles.ticketInfoLabel}>Class</Text>
-                    <Text style={styles.ticketInfoValue}>{ticket.seatClass === 'standard' ? 'Standard' : 'Business'}</Text>
-                  </View>
-                  <View style={styles.ticketInfo}>
-                    <Text style={styles.ticketInfoLabel}>Date</Text>
-                    <Text style={styles.ticketInfoValue}>{ticket.travelDate}</Text>
-                  </View>
-                  <View style={styles.ticketInfo}>
-                    <Text style={styles.ticketInfoLabel}>Fare</Text>
-                    <Text style={[styles.ticketInfoValue, { color: '#10B981', fontWeight: '800' }]}>
-                      ₹{ticket.fare.toLocaleString('en-IN')}
+                  <View>
+                    <Text style={styles.muted}>{t.seatsLabel || 'Seats'}</Text>
+                    <Text style={styles.value}>
+                      {Array.isArray(ticket.seats) ? ticket.seats.map((s: any) => safeText(s)).join(', ') : safeText(ticket.seats)}
                     </Text>
                   </View>
                 </View>
-              </View>
 
-              {/* Actions */}
-              <View style={styles.ticketActions}>
-                <TouchableOpacity style={styles.viewBtn} onPress={() => router.push({ pathname: '/ticket', params: { id: ticket.id } })}>
-                  <Text style={styles.viewBtnText}>👁️ View Full Ticket</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => Alert.alert('Delete Ticket', 'Remove this demo ticket?', [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Delete', style: 'destructive', onPress: () => removeTicket(ticket.id) },
-                  ])}
-                >
-                  <Text style={styles.deleteBtnText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
+                <View style={styles.qrRow}>
+                  <Image source={{ uri: qrImageUrl }} style={styles.qrImage} resizeMode="contain" />
+                  <View style={{ flex: 1, marginLeft: 12, justifyContent: 'center' }}>
+                    <Text style={styles.muted}>{t.bookingId || 'Booking ID'}</Text>
+                    <Text style={styles.bookingIdText}>{safeText(ticket.bookingId)}</Text>
+                    <Text style={styles.tapText}>Tap to view full ticket & QR</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })
         )}
-        <View style={{ height: 30 }} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.surface },
-  header: { paddingTop: 55, paddingBottom: 28, paddingHorizontal: Spacing.base },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: Colors.textOnDark, marginBottom: 4 },
-  headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.65)' },
-  body: { padding: Spacing.base },
-  demoNotice: {
-    backgroundColor: '#FFF3E0', borderRadius: BorderRadius.lg, padding: Spacing.sm,
-    marginBottom: Spacing.base, borderWidth: 1, borderColor: '#FFE082',
-  },
-  demoNoticeText: { fontSize: 12, color: '#E65100', textAlign: 'center', fontWeight: '600' },
-  emptyState: { alignItems: 'center', paddingVertical: 60 },
-  emptyEmoji: { fontSize: 64, marginBottom: Spacing.base },
-  emptyTitle: { fontSize: 22, fontWeight: '800', color: Colors.primary, marginBottom: 8 },
-  emptySub: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: Spacing.xl },
-  searchBtn: { borderRadius: BorderRadius.lg, overflow: 'hidden', width: 180 },
-  searchBtnGrad: { paddingVertical: 14, alignItems: 'center' },
-  searchBtnText: { fontSize: 15, fontWeight: '700', color: Colors.textOnDark },
-  ticketCard: { backgroundColor: Colors.background, borderRadius: BorderRadius.xl, marginBottom: Spacing.base, overflow: 'hidden', ...Shadow.md },
-  ticketHeader: { padding: Spacing.base, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  ticketAppName: { fontSize: 14, fontWeight: '800', color: Colors.textOnDark },
-  demoBadge: { backgroundColor: '#EF4444', paddingVertical: 2, paddingHorizontal: 8, borderRadius: BorderRadius.full, marginTop: 4, alignSelf: 'flex-start' },
-  demoBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFFFFF' },
-  ticketEmoji: { fontSize: 32 },
-  ticketBody: { padding: Spacing.base },
-  ticketRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.base },
-  ticketStation: { flex: 1 },
-  ticketTime: { fontSize: 22, fontWeight: '800', color: Colors.primary },
-  ticketStationName: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  ticketMid: { alignItems: 'center', paddingHorizontal: 8 },
-  ticketDuration: { fontSize: 20, marginBottom: 4 },
-  ticketLine: { width: 60, height: 2, backgroundColor: Colors.divider },
-  ticketDividerDashed: { borderBottomWidth: 1, borderColor: Colors.divider, borderStyle: 'dashed', marginVertical: Spacing.base },
-  ticketInfoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  ticketInfo: { width: '47%' },
-  ticketInfoLabel: { fontSize: 11, color: Colors.textLight, fontWeight: '500', marginBottom: 2 },
-  ticketInfoValue: { fontSize: 13, fontWeight: '700', color: Colors.primary },
-  ticketActions: { flexDirection: 'row', padding: Spacing.base, gap: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.divider },
-  viewBtn: {
-    flex: 1, backgroundColor: Colors.secondary, borderRadius: BorderRadius.lg,
-    paddingVertical: 12, alignItems: 'center',
-  },
-  viewBtnText: { fontSize: 13, fontWeight: '700', color: Colors.textOnDark },
-  deleteBtn: {
-    backgroundColor: '#FEE2E2', borderRadius: BorderRadius.lg,
-    paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center',
-  },
-  deleteBtnText: { fontSize: 18 },
+  root: { flex: 1, backgroundColor: Colors.primary },
+  header: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
+  body: { padding: 16, gap: 16 },
+  center: { alignItems: 'center', justifyContent: 'center', marginTop: 60, gap: 16 },
+  noTicketText: { color: '#FFFFFF', fontSize: 16, textAlign: 'center' },
+  searchButton: { backgroundColor: Colors.accent, paddingHorizontal: 20, paddingVertical: 12, borderRadius: BorderRadius.md },
+  searchButtonText: { color: Colors.primary, fontWeight: '800', fontSize: 15 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: BorderRadius.xl, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  route: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary, flex: 1 },
+  statusBadge: { fontSize: 10, fontWeight: '800', color: '#38A169', backgroundColor: '#F0FFF4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  trainInfo: { fontSize: 13, color: '#718096', marginTop: 4, fontWeight: '600' },
+  detailsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingVertical: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#EDF2F7' },
+  muted: { fontSize: 11, color: '#718096' },
+  value: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary, marginTop: 2 },
+  qrRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, backgroundColor: '#F7FAFC', padding: 10, borderRadius: BorderRadius.md },
+  qrImage: { width: 60, height: 60, backgroundColor: '#FFFFFF' },
+  bookingIdText: { fontSize: 13, fontWeight: '800', color: Colors.primary, marginTop: 2 },
+  tapText: { fontSize: 10, color: '#3182CE', marginTop: 4, fontWeight: '700' },
 });

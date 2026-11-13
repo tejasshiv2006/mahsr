@@ -1,152 +1,323 @@
-import { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { Colors, BorderRadius } from '../src/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { Colors, BorderRadius, Spacing } from '../src/constants/theme';
 import { useSearchStore } from '../src/store/useSearchStore';
 import { useTicketStore } from '../src/store/useTicketStore';
-import { useAppStore } from '../src/store/useAppStore';
-import { translations } from '../src/constants/translations';
 
-const ROWS = 10;
-const COLS = ['A', 'B', 'C', 'D'];
+// High-Speed Rail 2+2 Seating Layout (A & D are Window seats, B & C are Aisle seats)
+const ROWS = ['1', '2', '3', '4', '5', '6', '7', '8'];
+const COLS = [
+  { id: 'A', type: 'Window' },
+  { id: 'B', type: 'Aisle' },
+  { id: 'C', type: 'Aisle' },
+  { id: 'D', type: 'Window' },
+];
 
-export default function SeatSelection() {
-  const { selectedTrain: train, selectedSeats, toggleSeat, selectedClass, params } = useSearchStore();
-  const addTicket = useTicketStore((s) => s.addTicket);
-  const user = useAppStore((s) => s.user);
-  const language = useAppStore((s) => s.language);
-  const t = translations[language];
+export default function SeatSelectionScreen() {
+  const router = useRouter();
+  const { selectedTrain, params } = useSearchStore();
+  const addTicket = useTicketStore((s: any) => s.addTicket);
+  const requiredSeats = params.passengers || 1;
+  
+  // Default first available seat selected
+  const [selectedSeats, setSelectedSeats] = useState<string[]>(['1A']);
 
-  // Deterministic "taken" seats so the layout is stable between renders.
-  const taken = useMemo(() => {
-    const set = new Set<string>();
-    for (let i = 0; i < ROWS * COLS.length; i++) {
-      if ((i * 7 + 3) % 5 < 2) set.add(`${Math.floor(i / 4) + 1}${COLS[i % 4]}`);
+  const toggleSeat = (seatId: string) => {
+    if (selectedSeats.includes(seatId)) {
+      if (selectedSeats.length === 1) {
+        Alert.alert('Selection Notice', 'At least one seat must be selected for your journey.');
+        return;
+      }
+      setSelectedSeats(selectedSeats.filter((s) => s !== seatId));
+    } else {
+      if (selectedSeats.length >= requiredSeats) {
+        Alert.alert(
+          'Passenger Limit Reached',
+          `You have selected seats for all ${requiredSeats} passenger(s). Deselect a seat to change your choice.`
+        );
+        return;
+      }
+      setSelectedSeats([...selectedSeats, seatId]);
     }
-    return set;
-  }, []);
+  };
 
-  if (!train) {
-    return (
-      <SafeAreaView style={styles.center}>
-        <Text>{t.noTrainSelected}</Text>
-        <TouchableOpacity onPress={() => router.replace('/(tabs)/search')}>
-          <Text style={styles.link}>{t.searchTrains}</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    );
-  }
-
-  const total = selectedSeats.length * train.fare[selectedClass];
-
-  const confirm = () => {
-    if (selectedSeats.length !== params.passengers) {
-      Alert.alert(t.selectSeatsTitle, t.selectSeatsMsg.replace('{n}', String(params.passengers)));
+  const confirmSeats = () => {
+    if (selectedSeats.length < requiredSeats) {
+      Alert.alert('Incomplete Selection', `Please select all ${requiredSeats} required seat(s).`);
       return;
     }
-    const id = `TKT${Date.now()}`;
-    const bookingId = `MH${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-    addTicket({
-      id,
-      bookingId,
-      passengerName: user?.name ?? 'Guest',
-      trainId: train.id,
-      trainName: train.name,
-      trainNumber: train.number,
-      fromStation: params.fromStation?.name ?? 'Mumbai (BKC)',
-      toStation: params.toStation?.name ?? 'Ahmedabad',
-      travelDate: params.travelDate.toLocaleDateString('en-IN'),
-      departureTime: train.departureTime,
-      arrivalTime: train.arrivalTime,
+
+    const seatClass = (params as { seatClass?: string }).seatClass || 'standard';
+    const farePerSeat = seatClass === 'business'
+      ? (selectedTrain?.fare?.business ?? 2400)
+      : (selectedTrain?.fare?.standard ?? 1200);
+
+    // 1. Generate new ticket entry for the store
+    const newTicket = {
+      id: `TICKET-${Date.now()}`,
+      bookingId: `MAHSR-${Math.floor(100000 + Math.random() * 900000)}`,
+      trainNumber: selectedTrain?.number || 'T-20501',
+      trainName: selectedTrain?.name || 'Bullet Express',
+      fromStation: params.fromStation || { code: 'BCT', name: 'Mumbai Central' },
+      toStation: params.toStation || { code: 'ADI', name: 'Ahmedabad' },
+      travelDate: (params as unknown as { date?: string }).date || 'Today',
+      departureTime: selectedTrain?.departureTime || '06:00 AM',
+      arrivalTime: selectedTrain?.arrivalTime || '08:07 AM',
+      seatClass,
       seats: selectedSeats,
-      seatClass: selectedClass,
-      fare: total,
-      qrData: `DEMO|${bookingId}|${train.number}|${selectedSeats.join(',')}`,
-      generatedAt: new Date().toISOString(),
-    });
-    router.replace({ pathname: '/ticket', params: { id } });
+      fare: farePerSeat * selectedSeats.length,
+      passengerName: 'Tejas Passenger',
+      qrData: JSON.stringify({
+        bookingId: `MAHSR-${Date.now()}`,
+        train: selectedTrain?.number || 'T-20501',
+        seats: selectedSeats,
+      }),
+      createdAt: Date.now(),
+    };
+
+    // 2. Save to Ticket Store
+    addTicket(newTicket);
+
+    // 3. Success Alert and Redirection to My Tickets tab
+    Alert.alert(
+      'Booking Confirmed 🎉',
+      `Successfully reserved seats: ${selectedSeats.join(', ')}\nYour digital ticket is ready!`,
+      [
+        {
+          text: 'View My Tickets',
+          onPress: () => router.replace('/(tabs)/tickets'),
+        },
+      ]
+    );
   };
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.root} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}><Text style={styles.back}>‹ {t.back}</Text></TouchableOpacity>
-        <Text style={styles.title}>{t.seatSelection}</Text>
-        <Text style={styles.sub}>{train.number} · {selectedClass === 'standard' ? t.standardClass : t.businessClass} · {params.passengers} {t.passengersCount}</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={20} color={Colors.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Choose Your Seats</Text>
+        <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
-        <View style={styles.legend}>
-          <Legend color={Colors.available} label={t.available} />
-          <Legend color={Colors.selected} label={t.selected} />
-          <Legend color={Colors.unavailable} label={t.unavailable} />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Info Card */}
+        <View style={styles.infoCard}>
+          <Ionicons name="information-circle-outline" size={20} color={Colors.secondary} />
+          <Text style={styles.infoText}>
+            Selecting {selectedSeats.length} of {requiredSeats} required seat(s) for {selectedTrain?.name ?? 'MAHSR Express'}. Tap any available seat to choose.
+          </Text>
         </View>
 
-        {Array.from({ length: ROWS }, (_, r) => (
-          <View key={r} style={styles.seatRow}>
-            {COLS.map((c, ci) => {
-              const id = `${r + 1}${c}`;
-              const isTaken = taken.has(id);
-              const isSel = selectedSeats.includes(id);
-              return (
-                <View key={id} style={[styles.seatWrap, ci === 2 && { marginLeft: 22 }]}>
-                  <TouchableOpacity
-                    disabled={isTaken}
-                    onPress={() => toggleSeat(id)}
-                    style={[styles.seat, isTaken && styles.taken, isSel && styles.sel]}
-                    accessibilityLabel={`Seat ${id}`}
-                  >
-                    <Text style={[styles.seatText, isSel && { color: Colors.primary }]}>{id}</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+        {/* Legend */}
+        <View style={styles.legendRow}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendBox, styles.seatAvailable]} />
+            <Text style={styles.legendText}>Available</Text>
           </View>
-        ))}
+          <View style={styles.legendItem}>
+            <View style={[styles.legendBox, styles.seatSelected]} />
+            <Text style={styles.legendText}>Selected</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendBox, styles.seatOccupied]} />
+            <Text style={styles.legendText}>Occupied</Text>
+          </View>
+        </View>
+
+        {/* Coach Grid Layout */}
+        <View style={styles.coachContainer}>
+          <View style={styles.cabinHeader}>
+            <Ionicons name="train" size={18} color={Colors.primary} />
+            <Text style={styles.cabinTitle}>Executive Coach C2 (2+2 Layout)</Text>
+          </View>
+
+          {/* Column Headings */}
+          <View style={styles.columnHeaderRow}>
+            <Text style={styles.colHeaderText}>Window</Text>
+            <Text style={styles.colHeaderText}>Aisle</Text>
+            <View style={{ width: 20 }} />
+            <Text style={styles.colHeaderText}>Aisle</Text>
+            <Text style={styles.colHeaderText}>Window</Text>
+          </View>
+
+          {ROWS.map((rowNum) => (
+            <View key={rowNum} style={styles.seatRow}>
+              <Text style={styles.rowLabel}>{rowNum}</Text>
+              <View style={styles.seatsGroup}>
+                {COLS.map((col, idx) => {
+                  const seatId = `${rowNum}${col.id}`;
+                  const isSelected = selectedSeats.includes(seatId);
+                  // Simulating some pre-booked occupied seats
+                  const isOccupied = seatId === '2B' || seatId === '5C' || seatId === '7A';
+
+                  return (
+                    <React.Fragment key={seatId}>
+                      {idx === 2 && <View style={styles.aisleGap} />}
+                      <TouchableOpacity
+                        style={[
+                          styles.seatItem,
+                          isOccupied && styles.seatItemOccupied,
+                          isSelected && styles.seatItemSeleted,
+                        ]}
+                        disabled={isOccupied}
+                        onPress={() => toggleSeat(seatId)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.seatText,
+                            isOccupied && styles.seatTextOccupied,
+                            isSelected && styles.seatTextSelected,
+                          ]}
+                        >
+                          {seatId}
+                        </Text>
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+        </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      {/* Bottom Action Footer */}
+      <View style={styles.footerBar}>
         <View>
-          <Text style={styles.muted}>{selectedSeats.join(', ') || t.noSeatsYet}</Text>
-          <Text style={styles.total}>₹{total.toLocaleString('en-IN')}</Text>
+          <Text style={styles.footerLabel}>Selected Seats</Text>
+          <Text style={styles.footerValue}>{selectedSeats.join(', ') || 'None'}</Text>
         </View>
-        <TouchableOpacity style={styles.cta} onPress={confirm}>
-          <Text style={styles.ctaText}>{t.bookDemoTicket}</Text>
+        <TouchableOpacity 
+          style={[styles.confirmButton, selectedSeats.length < requiredSeats && styles.disabledBtn]} 
+          onPress={confirmSeats} 
+          activeOpacity={0.85}
+        >
+          <Text style={styles.confirmButtonText}>Confirm Seats</Text>
+          <Ionicons name="checkmark-circle" size={18} color={Colors.primary} style={{ marginLeft: 6 }} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
-const Legend = ({ color, label }: { color: string; label: string }) => (
-  <View style={styles.legendItem}>
-    <View style={[styles.legendDot, { backgroundColor: color }]} />
-    <Text style={styles.muted}>{label}</Text>
-  </View>
-);
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.surface },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  header: { backgroundColor: Colors.primary, padding: 20, paddingBottom: 24 },
-  back: { color: Colors.textOnDark, marginBottom: 10, fontSize: 15 },
-  title: { color: Colors.textOnDark, fontSize: 22, fontWeight: '800' },
-  sub: { color: '#B8C7DA', marginTop: 2 },
-  body: { padding: 16, alignItems: 'center', gap: 8 },
-  legend: { flexDirection: 'row', gap: 16, marginBottom: 8 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceCard,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.divider,
+  },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: Colors.primary },
+  content: { padding: Spacing.base, paddingBottom: 100 },
+  infoCard: {
+    flexDirection: 'row',
+    backgroundColor: '#E5F3FD',
+    padding: 12,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  infoText: { flex: 1, fontSize: 12, color: Colors.primary, fontWeight: '600' },
+  legendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: Colors.surfaceCard,
+    padding: 12,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.divider,
+    marginBottom: 20,
+  },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 12, height: 12, borderRadius: 4 },
-  seatRow: { flexDirection: 'row', gap: 8 },
-  seatWrap: {},
-  seat: { width: 52, height: 44, borderRadius: BorderRadius.sm, backgroundColor: Colors.available, alignItems: 'center', justifyContent: 'center' },
-  taken: { backgroundColor: Colors.unavailable },
-  sel: { backgroundColor: Colors.selected },
-  seatText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  muted: { color: Colors.textSecondary, fontSize: 13 },
-  link: { color: Colors.secondary, fontWeight: '700' },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: Colors.surfaceCard, borderTopWidth: 1, borderTopColor: Colors.divider },
-  total: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
-  cta: { backgroundColor: Colors.accent, borderRadius: BorderRadius.md, paddingHorizontal: 20, paddingVertical: 14 },
-  ctaText: { color: Colors.primary, fontWeight: '800' },
+  legendBox: { width: 14, height: 14, borderRadius: 3 },
+  seatAvailable: { backgroundColor: '#E2E8F0', borderWidth: 1, borderColor: '#CBD5E0' },
+  seatSelected: { backgroundColor: Colors.secondary },
+  seatOccupied: { backgroundColor: '#CBD5E0', opacity: 0.5 },
+  legendText: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600' },
+  coachContainer: {
+    backgroundColor: Colors.surfaceCard,
+    borderRadius: BorderRadius.xl,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: Colors.divider,
+    alignItems: 'center',
+  },
+  cabinHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  cabinTitle: { fontSize: 14, fontWeight: '800', color: Colors.primary },
+  columnHeaderRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    marginBottom: 10,
+  },
+  colHeaderText: { fontSize: 10, fontWeight: '700', color: Colors.textSecondary },
+  seatRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
+  rowLabel: { fontSize: 13, fontWeight: '800', color: Colors.textSecondary, width: 14, textAlign: 'center' },
+  seatsGroup: { flexDirection: 'row', alignItems: 'center' },
+  aisleGap: { width: 24 },
+  seatItem: {
+    width: 38,
+    height: 42,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: Colors.divider,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 3,
+  },
+  seatItemSeleted: { backgroundColor: Colors.secondary, borderColor: Colors.secondary },
+  seatItemOccupied: { backgroundColor: '#E2E8F0', opacity: 0.4 },
+  seatText: { fontSize: 12, fontWeight: '700', color: Colors.textPrimary },
+  seatTextSelected: { color: '#fff' },
+  seatTextOccupied: { color: Colors.textSecondary },
+  footerBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.surfaceCard,
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  footerLabel: { fontSize: 10, color: Colors.textSecondary, fontWeight: '600' },
+  footerValue: { fontSize: 15, fontWeight: '800', color: Colors.primary, marginTop: 2, maxWidth: 160 },
+  confirmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.md,
+  },
+  disabledBtn: { opacity: 0.5 },
+  confirmButtonText: { color: Colors.primary, fontWeight: '800', fontSize: 14 },
 });
