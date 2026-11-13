@@ -35,8 +35,8 @@ android {
     buildToolsVersion rootProject.hasProperty('buildToolsVersion') ? rootProject.ext.buildToolsVersion : "37.0.0"
     
     // Explicitly fallback to 37 matching your Expo configuration
-    compileSdk rootProject.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 37
-    
+    compileSdk 37
+    ndkVersion "27.1.12297006"
     namespace 'com.tejas.mahsrconnectone'
 
     // Pin CMake version to avoid Windows path/mkdir bugs in 3.22.1
