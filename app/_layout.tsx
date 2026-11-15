@@ -13,8 +13,8 @@ export default function RootLayout() {
           animation: 'slide_from_right', 
         }}
       >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(tabs)" />
+        {/* Pehla route hamesha main Smart Train Search (Tabs ya Index) hona chahiye */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="train-details" />
         <Stack.Screen name="seat-selection" />
         <Stack.Screen name="ticket" />
