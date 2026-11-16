@@ -2,6 +2,7 @@
   "expo": {
     "name": "MAHSR Connect One",
     "slug": "mahsr-connect-one",
+    "scheme": "mahsrconnectone",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -10,10 +11,28 @@
       "bundleIdentifier": "com.tejas.mahsrconnectone"
     },
     "android": {
-      "package": "com.tejas.mahsrconnectone"
+      "package": "com.tejas.mahsrconnectone",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDummyKeyForBuildTesting12345"
+        }
+      }
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow MAHSR Connect One to access your location for live train and station navigation."
+        }
+      ],
+      "expo-notifications"
     ],
     "extra": {
       "router": {
